@@ -5,7 +5,6 @@ use crate::{
 };
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::{
-    assert_one_yocto,
     borsh::{BorshDeserialize, BorshSerialize},
     collections::{UnorderedMap, UnorderedSet},
     env,
@@ -263,15 +262,6 @@ impl Contract {
         });
         account.internal_token_withdraw(&token_account_id, amount);
         self.internal_ft_transfer(&account_id, &token_account_id, amount)
-    }
-
-    #[payable]
-    pub fn donate_token_to_treasury(&mut self, token_account_id: AccountId, amount: U128) {
-        assert_one_yocto();
-        let account_id = env::predecessor_account_id();
-        let mut account = self.internal_unwrap_account(&account_id);
-        account.internal_token_withdraw(&token_account_id, amount.0);
-        self.treasury.internal_donate(&token_account_id, amount.0);
     }
 
     pub fn balance_of(&self, account_id: AccountId, token_account_id: AccountId) -> Option<U128> {
