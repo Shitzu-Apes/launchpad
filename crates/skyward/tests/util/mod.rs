@@ -8,7 +8,6 @@ use near_workspaces::{
     Account, Contract, Worker,
 };
 use owo_colors::OwoColorize;
-use skyward::VestingIntervalInput;
 
 #[macro_export]
 macro_rules! print_log {
@@ -80,27 +79,16 @@ pub struct Env {
     pub users: Vec<Account>,
 }
 
-fn to_nano(timestamp: u32) -> Timestamp {
+pub fn to_nano(timestamp: u32) -> Timestamp {
     Timestamp::from(timestamp) * 10u64.pow(9)
 }
 
 impl Env {
     pub async fn init(num_users: usize) -> anyhow::Result<Self> {
-        Self::init_with_schedule(
-            num_users,
-            vec![VestingIntervalInput {
-                start_timestamp: GENESIS_TIME - 1,
-                end_timestamp: GENESIS_TIME,
-                amount: SKYWARD_TOTAL_SUPPLY.into(),
-            }],
-        )
-        .await
+        Self::init_with_schedule(num_users).await
     }
 
-    pub async fn init_with_schedule(
-        num_users: usize,
-        skyward_vesting_schedule: Vec<VestingIntervalInput>,
-    ) -> anyhow::Result<Self> {
+    pub async fn init_with_schedule(num_users: usize) -> anyhow::Result<Self> {
         let worker = near_workspaces::sandbox().await?;
         let skyward_dao = worker
             .create_tla(
@@ -153,7 +141,6 @@ impl Env {
                 .call("new")
                 .args_json((
                     SKYWARD_TOKEN_ID,
-                    skyward_vesting_schedule,
                     U128(LISTING_FEE_NEAR.as_yoctonear()),
                     w_near.id(),
                 ))
@@ -326,27 +313,22 @@ impl Env {
         &self,
         user: &Account,
         tokens: &[(&Account, u128)],
+        start_time: u64,
     ) -> anyhow::Result<SaleOutput> {
-        self.sale_create_custom(
-            user,
-            tokens,
-            to_nano(WEEK) + BLOCK_DURATION * 15,
-            BLOCK_DURATION * 60,
-            None,
-            None,
-        )
-        .await
+        self.sale_create_custom(user, tokens, start_time, BLOCK_DURATION * 60, None, None)
+            .await
     }
 
     pub async fn sale_create_with_ref(
         &self,
         user: &Account,
         tokens: &[(&Account, u128)],
+        start_time: u64,
     ) -> anyhow::Result<SaleOutput> {
         self.sale_create_custom(
             user,
             tokens,
-            to_nano(WEEK) + BLOCK_DURATION * 15,
+            start_time,
             BLOCK_DURATION * 60,
             None,
             Some(100),
@@ -358,14 +340,11 @@ impl Env {
         &self,
         user: &Account,
         tokens: &[(&Account, u128)],
-        start_offset: u64,
+        start_time: u64,
         sale_duration: u64,
         permissions_contract_id: Option<AccountId>,
         referral_bpt: Option<u16>,
     ) -> anyhow::Result<SaleOutput> {
-        let current_time = self.worker.view_block().await?.header().timestamp_nanosec();
-        let start_time = current_time + start_offset;
-
         let initial_balance = user.view_account().await?.balance;
 
         let deposit = if user.id().as_str() != SKYWARD_ID {
@@ -449,15 +428,6 @@ impl Env {
             .await?
             .json()?;
         Ok(res.into_iter().map(|(a, b)| (a, b.0)).collect())
-    }
-
-    pub async fn skyward_circulating_supply(&self) -> anyhow::Result<u128> {
-        let res: U128 = self
-            .worker
-            .view(self.skyward.id(), "get_skyward_circulating_supply")
-            .await?
-            .json()?;
-        Ok(res.0)
     }
 
     pub async fn get_token_balance(

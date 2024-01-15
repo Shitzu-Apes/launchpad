@@ -362,16 +362,6 @@ impl FungibleTokenReceiver for Contract {
                 let mut account = self.internal_unwrap_account(&sender_id);
                 account.internal_token_deposit(&token_account_id, amount.0);
             }
-            FtOnTransferArgs::DonateToTreasury => {
-                let initial_storage_usage = env::storage_usage();
-                self.treasury.internal_donate(&token_account_id, amount.0);
-                assert_eq!(
-                    initial_storage_usage,
-                    env::storage_usage(),
-                    "{}",
-                    errors::UNREGISTERED_TREASURY_TOKEN
-                );
-            }
         }
         PromiseOrValue::Value(0.into())
     }

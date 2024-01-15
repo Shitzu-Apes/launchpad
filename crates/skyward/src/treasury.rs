@@ -1,45 +1,14 @@
 use crate::{
-    errors, to_nano, Contract, ContractExt, StorageKey, TimestampSec, AFTER_NEAR_DEPOSIT_GAS,
-    EXTRA_NEAR, NEAR_DEPOSIT_GAS, STORAGE_DEPOSIT, STORAGE_DEPOSIT_GAS,
+    errors, Contract, ContractExt, StorageKey, AFTER_NEAR_DEPOSIT_GAS, EXTRA_NEAR,
+    NEAR_DEPOSIT_GAS, STORAGE_DEPOSIT, STORAGE_DEPOSIT_GAS,
 };
 use near_sdk::{
-    assert_one_yocto,
     borsh::{BorshDeserialize, BorshSerialize},
-    collections::{LazyOption, UnorderedMap},
+    collections::UnorderedMap,
     env,
     json_types::U128,
-    near_bindgen,
-    serde::{Deserialize, Serialize},
-    AccountId, NearToken, Promise, Timestamp,
+    near_bindgen, AccountId, NearToken, Promise,
 };
-use primitive_types::U256;
-
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Debug, PartialEq))]
-pub struct VestingIntervalInput {
-    pub start_timestamp: TimestampSec,
-    pub end_timestamp: TimestampSec,
-    pub amount: U128,
-}
-
-#[derive(BorshDeserialize, BorshSerialize)]
-#[borsh(crate = "near_sdk::borsh")]
-pub struct VestingInterval {
-    pub start_timestamp: Timestamp,
-    pub end_timestamp: Timestamp,
-    pub amount: u128,
-}
-
-impl From<VestingIntervalInput> for VestingInterval {
-    fn from(vs: VestingIntervalInput) -> Self {
-        Self {
-            start_timestamp: to_nano(vs.start_timestamp),
-            end_timestamp: to_nano(vs.end_timestamp),
-            amount: vs.amount.into(),
-        }
-    }
-}
 
 #[derive(BorshDeserialize, BorshSerialize)]
 #[borsh(crate = "near_sdk::borsh")]
@@ -48,7 +17,6 @@ pub struct Treasury {
     pub skyward_token_id: AccountId,
 
     pub skyward_burned_amount: u128,
-    pub skyward_vesting_schedule: LazyOption<Vec<VestingInterval>>,
 
     pub listing_fee_near: u128,
 
@@ -61,7 +29,6 @@ pub struct Treasury {
 impl Treasury {
     pub fn new(
         skyward_token_id: AccountId,
-        skyward_vesting_schedule: Vec<VestingIntervalInput>,
         listing_fee_near: u128,
         w_near_token_id: AccountId,
     ) -> Self {
@@ -70,15 +37,6 @@ impl Treasury {
             balances: UnorderedMap::new(StorageKey::TreasuryBalances),
             skyward_token_id,
             skyward_burned_amount: 0,
-            skyward_vesting_schedule: LazyOption::new(
-                StorageKey::VestingSchedule,
-                Some(
-                    &skyward_vesting_schedule
-                        .into_iter()
-                        .map(|vs| vs.into())
-                        .collect(),
-                ),
-            ),
             listing_fee_near,
             w_near_token_id,
             locked_attached_deposits: 0,
@@ -142,60 +100,8 @@ impl Contract {
         self.treasury.skyward_token_id
     }
 
-    pub fn get_skyward_circulating_supply(&self) -> U128 {
-        let mut balance = 0;
-        let skyward_vesting_schedule = self.treasury.skyward_vesting_schedule.get().unwrap();
-        let current_timestamp = env::block_timestamp();
-        for vesting_interval in skyward_vesting_schedule {
-            balance += if current_timestamp <= vesting_interval.start_timestamp {
-                0
-            } else if current_timestamp >= vesting_interval.end_timestamp {
-                vesting_interval.amount
-            } else {
-                let total_duration =
-                    vesting_interval.end_timestamp - vesting_interval.start_timestamp;
-                let passed_duration = current_timestamp - vesting_interval.start_timestamp;
-                (U256::from(passed_duration) * U256::from(vesting_interval.amount)
-                    / U256::from(total_duration))
-                .as_u128()
-            };
-        }
-        (balance - self.treasury.skyward_burned_amount).into()
-    }
-
     pub fn get_listing_fee(&self) -> U128 {
         self.treasury.listing_fee_near.into()
-    }
-
-    #[payable]
-    pub fn redeem_skyward(&mut self, skyward_amount: U128, token_account_ids: Vec<AccountId>) {
-        assert_one_yocto();
-        let skyward_amount = skyward_amount.0;
-        assert!(skyward_amount > 0, "{}", errors::ZERO_SKYWARD);
-        let account_id = env::predecessor_account_id();
-        let mut account = self.internal_unwrap_account(&account_id);
-        account.internal_token_withdraw(&self.treasury.skyward_token_id, skyward_amount);
-        let numerator = U256::from(skyward_amount);
-        let denominator = U256::from(self.get_skyward_circulating_supply().0);
-        self.treasury.skyward_burned_amount += skyward_amount;
-        for token_account_id in token_account_ids {
-            let treasury_balance = self
-                .treasury
-                .balances
-                .get(&token_account_id)
-                .expect(errors::TOKEN_NOT_REGISTERED);
-            let amount = (U256::from(treasury_balance) * numerator / denominator).as_u128();
-            if amount > 0 {
-                let new_balance = treasury_balance
-                    .checked_sub(amount)
-                    .expect(errors::NOT_ENOUGH_BALANCE);
-                self.treasury
-                    .balances
-                    .insert(&token_account_id, &new_balance);
-                account.internal_token_deposit(&token_account_id, amount);
-            }
-        }
-        self.accounts.insert(&account_id, &account.into());
     }
 
     pub fn wrap_extra_near(&mut self) -> Promise {

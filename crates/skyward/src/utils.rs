@@ -1,5 +1,5 @@
 use crate::errors;
-use near_sdk::{env, AccountId, Gas, NearToken, Promise, StorageUsage, Timestamp};
+use near_sdk::{env, AccountId, Gas, NearToken, Promise, StorageUsage};
 
 pub(crate) const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 
@@ -19,7 +19,6 @@ pub(crate) const PERMISSION_CONTRACT_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() 
 pub(crate) const AFTER_IS_APPROVED_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 4);
 pub(crate) const MAYBE_REFUND_DEPOSIT_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 2);
 
-pub type TimestampSec = u32;
 pub type BasicPoints = u16;
 
 pub(crate) fn refund_extra_storage_deposit(storage_used: StorageUsage, used_balance: u128) {
@@ -56,8 +55,4 @@ pub(crate) fn assert_at_least_one_yocto() {
         "{}",
         errors::NEED_AT_LEAST_ONE_YOCTO
     )
-}
-
-pub(crate) fn to_nano(timestamp: TimestampSec) -> Timestamp {
-    Timestamp::from(timestamp) * 10u64.pow(9)
 }

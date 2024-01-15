@@ -1,15 +1,12 @@
 mod util;
 
 use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
-use near_sdk::{json_types::U128, serde_json::json, Gas, NearToken};
+use near_sdk::{env, json_types::U128, serde_json::json, Gas, NearToken};
 use near_workspaces::{
     types::{KeyType, SecretKey},
     AccountId,
 };
-use skyward::{
-    SaleInput, SaleInputOutToken, SaleOutput, SaleOutputOutToken, SubscriptionOutput,
-    VestingIntervalInput,
-};
+use skyward::{SaleInput, SaleInputOutToken, SaleOutput, SaleOutputOutToken, SubscriptionOutput};
 use util::*;
 
 const SKYWARD_WASM_BYTES: &[u8] = include_bytes!("../../../res/skyward.wasm");
@@ -26,7 +23,6 @@ const PERMISSIONS_CONTRACT_ID: &str = "kyc.test.near";
 
 const TOKEN1_ID: &str = "token1.test.near";
 
-const GENESIS_TIME: u32 = 1_600_000_000;
 const DAY: u32 = 24 * 60 * 60;
 const WEEK: u32 = 7 * DAY;
 const MONTH: u32 = 30 * DAY;
@@ -82,156 +78,182 @@ async fn test_account_deposit() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[test]
-// fn test_ft_transfer_call_donate() {
-//     let e = Env::init(1);
-//     let alice = e.users.get(0).unwrap();
+#[tokio::test]
+async fn test_wrap_extra_near() -> anyhow::Result<()> {
+    let environment = Env::init(0).await?;
 
-//     let token1 = e.deploy_ft(&alice.account_id, TOKEN1_ID);
-//     e.register_and_deposit(&alice, &token1, to_yocto("10000"));
+    assert_eq!(environment.get_treasury_balances().await?, vec![]);
 
-//     assert_eq!(
-//         e.get_treasury_balances(),
-//         vec![
-//             (e.w_near.account_id.clone(), 0),
-//             (token1.account_id.clone(), 0)
-//         ]
-//     );
+    environment
+        .worker
+        .root_account()?
+        .transfer_near(environment.skyward.id(), NearToken::from_near(9000))
+        .await?
+        .into_result()?;
 
-//     alice
-//         .call(
-//             token1.account_id.clone(),
-//             "ft_transfer_call",
-//             &json!({
-//                 "receiver_id": e.skyward.user_account.valid_account_id(),
-//                 "amount": U128::from(to_yocto("50000")),
-//                 "msg": "\"DonateToTreasury\"",
-//             })
-//             .to_string()
-//             .into_bytes(),
-//             TON_OF_GAS,
-//             1,
-//         )
-//         .assert_success();
+    assert_eq!(
+        environment
+            .get_token_balance(environment.w_near.id(), environment.skyward.as_account())
+            .await?,
+        0
+    );
 
-//     assert_eq!(
-//         e.get_treasury_balances(),
-//         vec![
-//             (e.w_near.account_id.clone(), 0),
-//             (token1.account_id.clone(), to_yocto("50000"))
-//         ]
-//     );
-// }
+    let initial_balance = environment.skyward.view_account().await?.balance;
 
-// #[test]
-// fn test_wrap_extra_near() {
-//     let e = Env::init(0);
+    let res: bool = environment
+        .skyward
+        .call("wrap_extra_near")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?
+        .json()?;
+    assert!(res);
 
-//     assert_eq!(e.get_treasury_balances(), vec![]);
+    let near_spent = initial_balance.as_yoctonear()
+        - environment
+            .skyward
+            .view_account()
+            .await?
+            .balance
+            .as_yoctonear();
+    assert!(near_spent > NearToken::from_near(9000).as_yoctonear());
 
-//     e.root
-//         .transfer(e.skyward.user_account.account_id.clone(), to_yocto("9000"))
-//         .assert_success();
+    let w_near_balance = environment.get_treasury_balances().await?[0].1;
+    assert!(w_near_balance > NearToken::from_near(9000).as_yoctonear());
+    assert_eq!(
+        environment
+            .get_token_balance(environment.w_near.id(), environment.skyward.as_account())
+            .await?,
+        w_near_balance
+    );
 
-//     assert_eq!(e.get_token_balance(&e.w_near, &e.skyward.user_account), 0);
+    assert!(environment
+        .skyward
+        .call("wrap_extra_near")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()
+        .is_err());
 
-//     let initial_balance = e.skyward.user_account.account().unwrap().amount;
+    environment
+        .worker
+        .root_account()?
+        .transfer_near(environment.skyward.id(), NearToken::from_millinear(10_100))
+        .await?
+        .into_result()?;
 
-//     let res = e
-//         .near
-//         .function_call(e.skyward.contract.wrap_extra_near(), TON_OF_GAS, 0);
-//     res.assert_success();
-//     let res: bool = res.unwrap_json();
-//     assert!(res);
+    let initial_balance = environment.skyward.view_account().await?.balance;
 
-//     let near_spent = initial_balance - e.skyward.user_account.account().unwrap().amount;
-//     assert!(near_spent > to_yocto("9000"));
+    let res: bool = environment
+        .skyward
+        .call("wrap_extra_near")
+        .max_gas()
+        .transact()
+        .await?
+        .into_result()?
+        .json()?;
+    assert!(res);
 
-//     let w_near_balance = e.get_treasury_balances()[0].1;
-//     assert!(w_near_balance > to_yocto("9000"));
-//     assert_eq!(
-//         e.get_token_balance(&e.w_near, &e.skyward.user_account),
-//         w_near_balance
-//     );
+    let near_spent = initial_balance.as_yoctonear()
+        - environment
+            .skyward
+            .view_account()
+            .await?
+            .balance
+            .as_yoctonear();
+    assert!(near_spent > NearToken::from_near(10).as_yoctonear());
 
-//     assert!(!e
-//         .near
-//         .function_call(e.skyward.contract.wrap_extra_near(), TON_OF_GAS, 0)
-//         .is_ok());
+    let w_near_balance_addition = environment.get_treasury_balances().await?[0].1 - w_near_balance;
+    assert!(w_near_balance_addition > NearToken::from_near(10).as_yoctonear());
+    assert_eq!(
+        environment
+            .get_token_balance(environment.w_near.id(), environment.skyward.as_account())
+            .await?,
+        w_near_balance + w_near_balance_addition
+    );
 
-//     e.root
-//         .transfer(e.skyward.user_account.account_id.clone(), to_yocto("10.1"))
-//         .assert_success();
+    Ok(())
+}
 
-//     let initial_balance = e.skyward.user_account.account().unwrap().amount;
+#[tokio::test]
+async fn test_create_sale() -> anyhow::Result<()> {
+    let environment = Env::init(1).await?;
+    let alice = environment.users.first().unwrap();
 
-//     let res = e
-//         .near
-//         .function_call(e.skyward.contract.wrap_extra_near(), TON_OF_GAS, 0);
-//     res.assert_success();
-//     let res: bool = res.unwrap_json();
-//     assert!(res);
+    let token1 = environment.deploy_ft(alice.id(), TOKEN1_ID).await?;
+    environment
+        .register_and_deposit(alice, token1.id(), NearToken::from_near(10000))
+        .await?;
 
-//     let near_spent = initial_balance - e.skyward.user_account.account().unwrap().amount;
-//     assert!(near_spent > to_yocto("10"));
+    let start_offset = to_nano(WEEK) + BLOCK_DURATION * 15;
+    let current_time = environment
+        .worker
+        .view_block()
+        .await?
+        .header()
+        .timestamp_nanosec();
+    let start_time = current_time + start_offset;
+    let sale = environment
+        .sale_create(
+            alice,
+            &[(
+                token1.as_account(),
+                NearToken::from_near(4000).as_yoctonear(),
+            )],
+            start_time,
+        )
+        .await?;
 
-//     let w_near_balance_addition = e.get_treasury_balances()[0].1 - w_near_balance;
-//     assert!(w_near_balance_addition > to_yocto("10"));
-//     assert_eq!(
-//         e.get_token_balance(&e.w_near, &e.skyward.user_account),
-//         w_near_balance + w_near_balance_addition
-//     );
-// }
+    let current_block = environment.worker.view_block().await?;
+    assert_eq!(
+        sale,
+        SaleOutput {
+            sale_id: 0,
+            title: TITLE.to_string(),
+            url: None,
+            permissions_contract_id: None,
+            owner_id: alice.id().parse()?,
+            out_tokens: vec![SaleOutputOutToken {
+                token_account_id: token1.id().parse()?,
+                remaining: NearToken::from_near(4000).as_yoctonear().into(),
+                distributed: 0.into(),
+                treasury_unclaimed: Some(0.into()),
+                referral_bpt: None
+            }],
+            in_token_account_id: environment.w_near.id().parse()?,
+            in_token_remaining: U128(0),
+            in_token_paid_unclaimed: U128(0),
+            in_token_paid: U128(0),
+            total_shares: U128(0),
+            start_time: start_time.into(),
+            duration: (BLOCK_DURATION * 60).into(),
+            remaining_duration: (BLOCK_DURATION * 60).into(),
+            subscription: None,
+            current_time: current_block.timestamp().into(),
+            current_block_height: current_block.height().into(),
+            start_block_height: sale.start_block_height,
+            end_block_height: None
+        },
+    );
 
-// #[test]
-// fn test_create_sale() {
-//     let e = Env::init(1);
-//     let alice = e.users.get(0).unwrap();
+    assert_eq!(
+        environment.balances_of(alice).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_near(10).as_yoctonear()
+            ),
+            (
+                token1.id().clone(),
+                NearToken::from_near(6000).as_yoctonear()
+            ),
+        ]
+    );
 
-//     let token1 = e.deploy_ft(&alice.account_id, TOKEN1_ID);
-//     e.register_and_deposit(&alice, &token1, to_yocto("10000"));
-
-//     let sale = e.sale_create(alice, &[(&token1, to_yocto("4000"))]);
-
-//     assert_eq!(
-//         sale,
-//         SaleOutput {
-//             sale_id: 0,
-//             title: TITLE.to_string(),
-//             url: None,
-//             permissions_contract_id: None,
-//             owner_id: alice.account_id.clone(),
-//             out_tokens: vec![SaleOutputOutToken {
-//                 token_account_id: token1.account_id.clone(),
-//                 remaining: to_yocto("4000").into(),
-//                 distributed: 0.into(),
-//                 treasury_unclaimed: Some(0.into()),
-//                 referral_bpt: None
-//             }],
-//             in_token_account_id: e.w_near.account_id.clone(),
-//             in_token_remaining: U128(0),
-//             in_token_paid_unclaimed: U128(0),
-//             in_token_paid: U128(0),
-//             total_shares: U128(0),
-//             start_time: (to_nano(GENESIS_TIME + WEEK) + BLOCK_DURATION * 15).into(),
-//             duration: (BLOCK_DURATION * 60).into(),
-//             remaining_duration: (BLOCK_DURATION * 60).into(),
-//             subscription: None,
-//             current_time: to_nano(GENESIS_TIME).into(),
-//             current_block_height: alice.borrow_runtime().current_block().block_height,
-//             start_block_height: sale.start_block_height,
-//             end_block_height: None
-//         },
-//     );
-
-//     assert_eq!(
-//         e.balances_of(alice),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("10")),
-//             (token1.account_id.clone(), to_yocto("6000")),
-//         ]
-//     );
-// }
+    Ok(())
+}
 
 // #[test]
 // fn test_join_sale() {

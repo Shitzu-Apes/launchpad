@@ -16,7 +16,6 @@ use near_sdk::{
 #[serde(crate = "near_sdk::serde")]
 pub enum FtOnTransferArgs {
     AccountDeposit,
-    DonateToTreasury,
 }
 
 #[ext_contract(ext_permission_contract)]

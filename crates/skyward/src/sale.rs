@@ -1,7 +1,7 @@
 use crate::{
     assert_at_least_one_yocto, errors, ext_permission_contract, refund_extra_storage_deposit,
     refund_released_storage, Account, BasicPoints, Contract, ContractExt, SubscriptionOutput,
-    VestingInterval, AFTER_IS_APPROVED_GAS, MAYBE_REFUND_DEPOSIT_GAS, PERMISSION_CONTRACT_GAS,
+    AFTER_IS_APPROVED_GAS, MAYBE_REFUND_DEPOSIT_GAS, PERMISSION_CONTRACT_GAS,
 };
 use near_sdk::{
     assert_one_yocto,
@@ -194,9 +194,9 @@ pub struct SaleOutput {
     pub subscription: Option<SubscriptionOutput>,
 
     pub current_time: U64,
-    pub current_block_height: BlockHeight,
-    pub start_block_height: BlockHeight,
-    pub end_block_height: Option<BlockHeight>,
+    pub current_block_height: U64,
+    pub start_block_height: U64,
+    pub end_block_height: Option<U64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -375,9 +375,9 @@ impl Sale {
             remaining_duration: remaining_duration.into(),
             subscription,
             current_time: env::block_timestamp().into(),
-            current_block_height: env::block_height(),
-            start_block_height: self.start_block_height,
-            end_block_height: self.end_block_height,
+            current_block_height: env::block_height().into(),
+            start_block_height: self.start_block_height.into(),
+            end_block_height: self.end_block_height.map(|height| height.into()),
         }
     }
 
@@ -497,56 +497,23 @@ impl Contract {
         );
         sale.assert_valid_not_started();
 
-        if sale.owner_id == env::current_account_id() {
-            // Skyward Sale
-            assert_eq!(
-                sale.out_tokens.len(),
-                1,
-                "{}",
-                errors::INVALID_INITIAL_SKYWARD_SALE
-            );
-            assert_eq!(
-                &sale.out_tokens[0].token_account_id,
-                &self.treasury.skyward_token_id,
-                "{}",
-                errors::INVALID_INITIAL_SKYWARD_SALE
-            );
-            // Registering IN token into the treasury
-            self.treasury.internal_deposit(&sale.in_token_account_id, 0);
-            // Registering SKYWARD vesting schedule
-            let mut skyward_vesting_schedule =
-                self.treasury.skyward_vesting_schedule.get().unwrap();
-            skyward_vesting_schedule.push(VestingInterval {
-                start_timestamp: sale.start_time,
-                end_timestamp: sale.start_time + sale.duration,
-                amount: sale.out_tokens[0].remaining,
-            });
-            self.treasury
-                .skyward_vesting_schedule
-                .set(&skyward_vesting_schedule);
-
-            self.sales.insert(&sale_id, &sale.into());
-            self.num_sales += 1;
-        } else {
-            let mut account = self.internal_unwrap_account(&sale.owner_id);
-            for out_token in &sale.out_tokens {
-                if out_token.remaining > 0 {
-                    account
-                        .internal_token_withdraw(&out_token.token_account_id, out_token.remaining);
-                }
+        let mut account = self.internal_unwrap_account(&sale.owner_id);
+        for out_token in &sale.out_tokens {
+            if out_token.remaining > 0 {
+                account.internal_token_withdraw(&out_token.token_account_id, out_token.remaining);
             }
-            self.internal_maybe_register_token(&mut account, &sale.in_token_account_id);
-            account.sales.insert(&sale_id);
-
-            self.accounts.insert(&sale.owner_id, &account.into());
-            self.sales.insert(&sale_id, &sale.into());
-            self.num_sales += 1;
-
-            refund_extra_storage_deposit(
-                env::storage_usage() - initial_storage_usage,
-                self.treasury.listing_fee_near,
-            );
         }
+        self.internal_maybe_register_token(&mut account, &sale.in_token_account_id);
+        account.sales.insert(&sale_id);
+
+        self.accounts.insert(&sale.owner_id, &account.into());
+        self.sales.insert(&sale_id, &sale.into());
+        self.num_sales += 1;
+
+        refund_extra_storage_deposit(
+            env::storage_usage() - initial_storage_usage,
+            self.treasury.listing_fee_near,
+        );
         sale_id
     }
 
