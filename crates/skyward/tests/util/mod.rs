@@ -246,6 +246,8 @@ impl Env {
             .into_result()?;
         self.storage_deposit(&token, self.skyward.as_account(), None, None)
             .await?;
+        self.storage_deposit(&token, &self.skyward_dao, None, None)
+            .await?;
         Ok(token)
     }
 
@@ -255,15 +257,6 @@ impl Env {
                 "account_id": user.id()
             }))
             .deposit(amount)
-            .transact()
-            .await?
-            .into_result()?;
-        Ok(())
-    }
-
-    pub async fn register_skyward_token(&self, user: &Account) -> anyhow::Result<()> {
-        user.call(self.skyward.id(), "register_token")
-            .args_json((None::<AccountId>, self.skyward_token.id()))
             .transact()
             .await?
             .into_result()?;
