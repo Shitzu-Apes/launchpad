@@ -9,7 +9,7 @@ use near_workspaces::{
 use skyward::{SaleInput, SaleInputOutToken, SaleOutput, SaleOutputOutToken, SubscriptionOutput};
 use util::*;
 
-const SKYWARD_WASM_BYTES: &[u8] = include_bytes!("../../../res/skyward.wasm");
+const SKYWARD_WASM_BYTES: &[u8] = include_bytes!("../../../res/skyward_testing.wasm");
 const FUNGIBLE_TOKEN_WASM_BYTES: &[u8] = include_bytes!("../../../common/fungible_token.wasm");
 const W_NEAR_WASM_BYTES: &[u8] = include_bytes!("../../../common/w_near.wasm");
 const PERMISSIONS_WASM_BYTES: &[u8] = include_bytes!("../../../res/permissions.wasm");
@@ -26,7 +26,6 @@ const TOKEN1_ID: &str = "token1.test.near";
 const DAY: u32 = 24 * 60 * 60;
 const WEEK: u32 = 7 * DAY;
 const MONTH: u32 = 30 * DAY;
-const TON_OF_GAS: Gas = Gas::from_tgas(200);
 const SKYWARD_TOKEN_DECIMALS: u8 = 18;
 const SKYWARD_TOKEN_BASE: u128 = 10u128.pow(SKYWARD_TOKEN_DECIMALS as u32);
 const SKYWARD_TOTAL_SUPPLY: u128 = 1_000_000 * SKYWARD_TOKEN_BASE;
@@ -255,201 +254,256 @@ async fn test_create_sale() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[test]
-// fn test_join_sale() {
-//     let e = Env::init(2);
-//     let alice = e.users.get(0).unwrap();
-//     let bob = e.users.get(1).unwrap();
+#[tokio::test]
+async fn test_join_sale() -> anyhow::Result<()> {
+    let environment = Env::init(2).await?;
+    let alice = environment.users.first().unwrap();
+    let bob = environment.users.get(1).unwrap();
 
-//     let token1 = e.deploy_ft(&alice.account_id, TOKEN1_ID);
-//     e.register_and_deposit(&alice, &token1, to_yocto("10000"));
+    let token1 = environment.deploy_ft(alice.id(), TOKEN1_ID).await?;
+    environment
+        .register_and_deposit(alice, token1.id(), NearToken::from_near(10_000))
+        .await?;
 
-//     let sale = e.sale_create(alice, &[(&token1, to_yocto("3600"))]);
+    let start_offset = BLOCK_DURATION * 15;
+    let current_time = environment
+        .worker
+        .view_block()
+        .await?
+        .header()
+        .timestamp_nanosec();
+    let start_time = current_time + start_offset;
+    let sale = environment
+        .sale_create(
+            alice,
+            &[(
+                token1.as_account(),
+                NearToken::from_near(3_600).as_yoctonear(),
+            )],
+            start_time,
+        )
+        .await?;
 
-//     bob.function_call(
-//         e.skyward
-//             .contract
-//             .sale_deposit_in_token(sale.sale_id, to_yocto("4").into(), None),
-//         BASE_GAS,
-//         to_yocto("0.01"),
-//     )
-//     .assert_success();
+    log_tx_result(
+        "sale_deposit_in_token",
+        bob.call(environment.skyward.id(), "sale_deposit_in_token")
+            .args_json((
+                sale.sale_id,
+                U128(NearToken::from_near(4).as_yoctonear()),
+                None::<AccountId>,
+            ))
+            .deposit(NearToken::from_millinear(10))
+            .transact()
+            .await?,
+    )?;
 
-//     let bobs_sale = e.get_sale(0, Some(bob.valid_account_id()));
-//     assert_eq!(bobs_sale.in_token_remaining.0, to_yocto("4"));
-//     assert_eq!(bobs_sale.total_shares.0, to_yocto("4"));
-//     assert_eq!(
-//         bobs_sale.subscription,
-//         Some(SubscriptionOutput {
-//             claimed_out_balance: vec![to_yocto("0").into()],
-//             spent_in_balance: to_yocto("0").into(),
-//             remaining_in_balance: to_yocto("4").into(),
-//             unclaimed_out_balances: vec![U128(0)],
-//             shares: to_yocto("4").into(),
-//             referral_id: None
-//         })
-//     );
+    let bobs_sale = environment.get_sale(0, Some(bob.id().clone())).await?;
+    assert_eq!(
+        bobs_sale.in_token_remaining.0,
+        NearToken::from_near(4).as_yoctonear()
+    );
+    assert_eq!(
+        bobs_sale.total_shares.0,
+        NearToken::from_near(4).as_yoctonear()
+    );
+    assert_eq!(
+        bobs_sale.subscription,
+        Some(SubscriptionOutput {
+            claimed_out_balance: vec![0.into()],
+            spent_in_balance: 0.into(),
+            remaining_in_balance: NearToken::from_near(4).as_yoctonear().into(),
+            unclaimed_out_balances: vec![U128(0)],
+            shares: NearToken::from_near(4).as_yoctonear().into(),
+            referral_id: None
+        })
+    );
 
-//     assert_eq!(
-//         e.balances_of(bob),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("6")),
-//             (token1.account_id.clone(), 0),
-//         ]
-//     );
+    assert_eq!(
+        environment.balances_of(bob).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_near(6).as_yoctonear()
+            ),
+            (token1.id().clone(), 0),
+        ]
+    );
 
-//     e.near.borrow_runtime_mut().cur_block.block_timestamp = sale.start_time.0 + sale.duration.0 / 2;
+    environment.worker.fast_forward(500).await?;
 
-//     let bobs_sale = e.get_sale(0, Some(bob.valid_account_id()));
-//     e.assert_sale_eq(
-//         &bobs_sale,
-//         PartialSale {
-//             out_tokens: vec![PartialOutToken {
-//                 remaining: to_yocto("1800").into(),
-//                 distributed: to_yocto("1800").into(),
-//                 treasury_unclaimed: Some(to_yocto("18").into()),
-//             }],
-//             in_token_remaining: to_yocto("2").into(),
-//             in_token_paid_unclaimed: to_yocto("2").into(),
-//             in_token_paid: to_yocto("2").into(),
-//             total_shares: to_yocto("4").into(),
-//             subscription: Some(SubscriptionOutput {
-//                 claimed_out_balance: vec![to_yocto("0").into()],
-//                 spent_in_balance: to_yocto("2").into(),
-//                 remaining_in_balance: to_yocto("2").into(),
-//                 unclaimed_out_balances: vec![to_yocto("1782").into()],
-//                 shares: to_yocto("4").into(),
-//                 referral_id: None,
-//             }),
-//         },
-//     );
+    let bobs_sale = environment.get_sale(0, Some(bob.id().clone())).await?;
 
-//     e.near.borrow_runtime_mut().cur_block.block_timestamp = sale.start_time.0 + sale.duration.0;
+    environment.assert_sale_eq(
+        &bobs_sale,
+        PartialSale {
+            out_tokens: vec![PartialOutToken {
+                remaining: 0.into(),
+                distributed: NearToken::from_near(3_600).as_yoctonear().into(),
+                treasury_unclaimed: Some(NearToken::from_near(36).as_yoctonear().into()),
+            }],
+            in_token_remaining: 0.into(),
+            in_token_paid_unclaimed: NearToken::from_near(4).as_yoctonear().into(),
+            in_token_paid: NearToken::from_near(4).as_yoctonear().into(),
+            total_shares: NearToken::from_near(4).as_yoctonear().into(),
+            subscription: Some(SubscriptionOutput {
+                claimed_out_balance: vec![0.into()],
+                spent_in_balance: NearToken::from_near(4).as_yoctonear().into(),
+                remaining_in_balance: 0.into(),
+                unclaimed_out_balances: vec![NearToken::from_near(3564).as_yoctonear().into()],
+                shares: NearToken::from_near(4).as_yoctonear().into(),
+                referral_id: None,
+            }),
+        },
+    );
 
-//     let bobs_sale = e.get_sale(0, Some(bob.valid_account_id()));
+    assert_eq!(
+        environment.get_treasury_balances().await?,
+        vec![
+            (environment.w_near.id().clone(), 0),
+            (token1.id().clone(), 0),
+        ]
+    );
 
-//     e.assert_sale_eq(
-//         &bobs_sale,
-//         PartialSale {
-//             out_tokens: vec![PartialOutToken {
-//                 remaining: 0.into(),
-//                 distributed: to_yocto("3600").into(),
-//                 treasury_unclaimed: Some(to_yocto("36").into()),
-//             }],
-//             in_token_remaining: to_yocto("0").into(),
-//             in_token_paid_unclaimed: to_yocto("4").into(),
-//             in_token_paid: to_yocto("4").into(),
-//             total_shares: to_yocto("4").into(),
-//             subscription: Some(SubscriptionOutput {
-//                 claimed_out_balance: vec![to_yocto("0").into()],
-//                 spent_in_balance: to_yocto("4").into(),
-//                 remaining_in_balance: to_yocto("0").into(),
-//                 unclaimed_out_balances: vec![to_yocto("3564").into()],
-//                 shares: to_yocto("4").into(),
-//                 referral_id: None,
-//             }),
-//         },
-//     );
+    log_tx_result(
+        "sale_distribute_unclaimed_tokens",
+        alice
+            .call(environment.skyward.id(), "sale_distribute_unclaimed_tokens")
+            .args_json((0,))
+            .transact()
+            .await?,
+    )?;
 
-//     assert_eq!(
-//         e.get_treasury_balances(),
-//         vec![
-//             (e.w_near.account_id.clone(), 0),
-//             (token1.account_id.clone(), 0),
-//         ]
-//     );
+    assert_eq!(
+        environment.balances_of(alice).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_millinear(13_960).as_yoctonear()
+            ),
+            (
+                token1.id().clone(),
+                NearToken::from_near(6400).as_yoctonear()
+            ),
+        ]
+    );
+    assert_eq!(
+        environment.get_treasury_balances().await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_millinear(40).as_yoctonear()
+            ),
+            (token1.id().clone(), NearToken::from_near(36).as_yoctonear()),
+        ]
+    );
+    assert_eq!(
+        environment.balances_of(bob).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_near(6).as_yoctonear()
+            ),
+            (token1.id().clone(), 0),
+        ]
+    );
 
-//     alice
-//         .function_call(
-//             e.skyward.contract.sale_distribute_unclaimed_tokens(0),
-//             BASE_GAS,
-//             0,
-//         )
-//         .assert_success();
+    let bobs_sale = environment.get_sale(0, Some(bob.id().clone())).await?;
 
-//     assert_eq!(
-//         e.balances_of(alice),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("13.96")),
-//             (token1.account_id.clone(), to_yocto("6400")),
-//         ]
-//     );
-//     assert_eq!(
-//         e.get_treasury_balances(),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("0.04")),
-//             (token1.account_id.clone(), to_yocto("36")),
-//         ]
-//     );
-//     assert_eq!(
-//         e.balances_of(bob),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("6")),
-//             (token1.account_id.clone(), 0),
-//         ]
-//     );
+    environment.assert_sale_eq(
+        &bobs_sale,
+        PartialSale {
+            out_tokens: vec![PartialOutToken {
+                remaining: 0.into(),
+                distributed: NearToken::from_near(3600).as_yoctonear().into(),
+                treasury_unclaimed: Some(0.into()),
+            }],
+            in_token_remaining: 0.into(),
+            in_token_paid_unclaimed: 0.into(),
+            in_token_paid: NearToken::from_near(4).as_yoctonear().into(),
+            total_shares: NearToken::from_near(4).as_yoctonear().into(),
+            subscription: Some(SubscriptionOutput {
+                claimed_out_balance: vec![0.into()],
+                spent_in_balance: NearToken::from_near(4).as_yoctonear().into(),
+                remaining_in_balance: 0.into(),
+                unclaimed_out_balances: vec![NearToken::from_near(3564).as_yoctonear().into()],
+                shares: NearToken::from_near(4).as_yoctonear().into(),
+                referral_id: None,
+            }),
+        },
+    );
 
-//     let bobs_sale = e.get_sale(0, Some(bob.valid_account_id()));
+    log_tx_result(
+        "sale_claim_out_tokens",
+        bob.call(environment.skyward.id(), "sale_claim_out_tokens")
+            .args_json((0,))
+            .transact()
+            .await?,
+    )?;
 
-//     e.assert_sale_eq(
-//         &bobs_sale,
-//         PartialSale {
-//             out_tokens: vec![PartialOutToken {
-//                 remaining: 0.into(),
-//                 distributed: to_yocto("3600").into(),
-//                 treasury_unclaimed: Some(0.into()),
-//             }],
-//             in_token_remaining: to_yocto("0").into(),
-//             in_token_paid_unclaimed: to_yocto("0").into(),
-//             in_token_paid: to_yocto("4").into(),
-//             total_shares: to_yocto("4").into(),
-//             subscription: Some(SubscriptionOutput {
-//                 claimed_out_balance: vec![to_yocto("0").into()],
-//                 spent_in_balance: to_yocto("4").into(),
-//                 remaining_in_balance: to_yocto("0").into(),
-//                 unclaimed_out_balances: vec![to_yocto("3564").into()],
-//                 shares: to_yocto("4").into(),
-//                 referral_id: None,
-//             }),
-//         },
-//     );
+    let bobs_sale = environment.get_sale(0, Some(bob.id().clone())).await?;
 
-//     bob.function_call(e.skyward.contract.sale_claim_out_tokens(0), BASE_GAS, 0)
-//         .assert_success();
+    environment.assert_sale_eq(
+        &bobs_sale,
+        PartialSale {
+            out_tokens: vec![PartialOutToken {
+                remaining: 0.into(),
+                distributed: NearToken::from_near(3600).as_yoctonear().into(),
+                treasury_unclaimed: Some(0.into()),
+            }],
+            in_token_remaining: 0.into(),
+            in_token_paid_unclaimed: 0.into(),
+            in_token_paid: NearToken::from_near(4).as_yoctonear().into(),
+            total_shares: 0.into(),
+            subscription: None,
+        },
+    );
 
-//     let bobs_sale = e.get_sale(0, Some(bob.valid_account_id()));
+    assert_eq!(
+        environment.get_treasury_balances().await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_millinear(40).as_yoctonear()
+            ),
+            (token1.id().clone(), NearToken::from_near(36).as_yoctonear()),
+        ]
+    );
+    assert_eq!(
+        environment.balances_of(bob).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_near(6).as_yoctonear()
+            ),
+            (
+                token1.id().clone(),
+                NearToken::from_near(3564).as_yoctonear()
+            ),
+        ]
+    );
 
-//     e.assert_sale_eq(
-//         &bobs_sale,
-//         PartialSale {
-//             out_tokens: vec![PartialOutToken {
-//                 remaining: 0.into(),
-//                 distributed: to_yocto("3600").into(),
-//                 treasury_unclaimed: Some(0.into()),
-//             }],
-//             in_token_remaining: to_yocto("0").into(),
-//             in_token_paid_unclaimed: to_yocto("0").into(),
-//             in_token_paid: to_yocto("4").into(),
-//             total_shares: to_yocto("0").into(),
-//             subscription: None,
-//         },
-//     );
+    environment
+        .storage_deposit(&token1, bob, None, Some(NearToken::from_millinear(50)))
+        .await?;
+    environment.withdraw_token(bob, token1.id(), None).await?;
 
-//     assert_eq!(
-//         e.get_treasury_balances(),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("0.04")),
-//             (token1.account_id.clone(), to_yocto("36")),
-//         ]
-//     );
-//     assert_eq!(
-//         e.balances_of(bob),
-//         vec![
-//             (e.w_near.account_id.clone(), to_yocto("6")),
-//             (token1.account_id.clone(), to_yocto("3564")),
-//         ]
-//     );
-// }
+    assert_eq!(
+        environment.balances_of(bob).await?,
+        vec![
+            (
+                environment.w_near.id().clone(),
+                NearToken::from_near(6).as_yoctonear()
+            ),
+            (token1.id().clone(), 0),
+        ]
+    );
+    assert_eq!(
+        environment.ft_balance_of(bob, token1.id()).await?,
+        NearToken::from_near(3564).as_yoctonear()
+    );
+
+    Ok(())
+}
 
 // #[test]
 // fn test_join_sale_with_referral() {

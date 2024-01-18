@@ -276,24 +276,28 @@ impl Env {
         token_id: &AccountId,
         amount: NearToken,
     ) -> anyhow::Result<()> {
-        user.call(self.skyward.id(), "register_token")
-            .args_json((None::<AccountId>, token_id))
-            .deposit(NearToken::from_millinear(10))
-            .transact()
-            .await?
-            .into_result()?;
+        log_tx_result(
+            "register_token",
+            user.call(self.skyward.id(), "register_token")
+                .args_json((None::<AccountId>, token_id))
+                .deposit(NearToken::from_millinear(10))
+                .transact()
+                .await?,
+        )?;
 
-        user.call(token_id, "ft_transfer_call")
-            .args_json(json!({
-                "receiver_id": self.skyward.id(),
-                "amount": U128::from(amount.as_yoctonear()),
-                "msg": "\"AccountDeposit\""
-            }))
-            .max_gas()
-            .deposit(NearToken::from_yoctonear(1))
-            .transact()
-            .await?
-            .into_result()?;
+        log_tx_result(
+            "ft_transfer_call",
+            user.call(token_id, "ft_transfer_call")
+                .args_json(json!({
+                    "receiver_id": self.skyward.id(),
+                    "amount": U128::from(amount.as_yoctonear()),
+                    "msg": "\"AccountDeposit\""
+                }))
+                .max_gas()
+                .deposit(NearToken::from_yoctonear(1))
+                .transact()
+                .await?,
+        )?;
 
         Ok(())
     }
@@ -354,29 +358,31 @@ impl Env {
         } else {
             NearToken::from_yoctonear(0)
         };
-        let sale_id: u64 = user
-            .call(self.skyward.id(), "sale_create")
-            .args_json((SaleInput {
-                title: TITLE.to_string(),
-                url: None,
-                permissions_contract_id: permissions_contract_id.map(|id| id.parse().unwrap()),
-                out_tokens: tokens
-                    .iter()
-                    .map(|(token, balance)| SaleInputOutToken {
-                        token_account_id: token.id().parse().unwrap(),
-                        balance: (*balance).into(),
-                        referral_bpt,
-                    })
-                    .collect(),
-                in_token_account_id: self.w_near.id().parse()?,
-                start_time: start_time.into(),
-                duration: sale_duration.into(),
-            },))
-            .deposit(deposit)
-            .transact()
-            .await?
-            .into_result()?
-            .json()?;
+        let sale_id: u64 = log_tx_result(
+            "sale_create",
+            user.call(self.skyward.id(), "sale_create")
+                .args_json((SaleInput {
+                    title: TITLE.to_string(),
+                    url: None,
+                    permissions_contract_id: permissions_contract_id.map(|id| id.parse().unwrap()),
+                    out_tokens: tokens
+                        .iter()
+                        .map(|(token, balance)| SaleInputOutToken {
+                            token_account_id: token.id().parse().unwrap(),
+                            balance: (*balance).into(),
+                            referral_bpt,
+                        })
+                        .collect(),
+                    in_token_account_id: self.w_near.id().parse()?,
+                    start_time: start_time.into(),
+                    duration: sale_duration.into(),
+                },))
+                .deposit(deposit)
+                .transact()
+                .await?,
+        )?
+        .0
+        .json()?;
 
         let balance_spent = initial_balance
             .checked_sub(user.view_account().await?.balance)
@@ -396,6 +402,23 @@ impl Env {
         }
 
         self.get_sale(sale_id, None).await
+    }
+
+    pub async fn withdraw_token(
+        &self,
+        user: &Account,
+        token_id: &AccountId,
+        amount: Option<u128>,
+    ) -> anyhow::Result<()> {
+        log_tx_result(
+            "withdraw_token",
+            user.call(self.skyward.id(), "withdraw_token")
+                .args_json((token_id, amount.map(U128)))
+                .gas(Gas::from_tgas(50))
+                .transact()
+                .await?,
+        )?;
+        Ok(())
     }
 
     pub async fn get_sale(
@@ -418,6 +441,19 @@ impl Env {
             .await?
             .json()?;
         Ok(res.into_iter().map(|(a, b)| (a, b.0)).collect())
+    }
+
+    pub async fn ft_balance_of(
+        &self,
+        user: &Account,
+        token_id: &AccountId,
+    ) -> anyhow::Result<u128> {
+        let res: U128 = user
+            .view(token_id, "ft_balance_of")
+            .args_json((user.id(),))
+            .await?
+            .json()?;
+        Ok(res.0)
     }
 
     pub async fn get_treasury_balances(&self) -> anyhow::Result<Vec<(AccountId, u128)>> {

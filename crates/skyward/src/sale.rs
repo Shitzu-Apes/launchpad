@@ -14,7 +14,10 @@ use near_sdk::{
 };
 use primitive_types::U256;
 
+#[cfg(not(feature = "integration-test"))]
 const MIN_DURATION_BEFORE_START: Duration = 7 * 24 * 60 * 60 * 1_000_000_000;
+#[cfg(feature = "integration-test")]
+const MIN_DURATION_BEFORE_START: Duration = 10 * 1_000_000_000;
 const MAX_DURATION_BEFORE_START: Duration = 365 * 24 * 60 * 60 * 1_000_000_000;
 const MAX_DURATION: Duration = 4 * 366 * 24 * 60 * 60 * 1_000_000_000;
 /// Minimum duration. Use 1 nanosecond to run a simple auction.
@@ -51,7 +54,7 @@ pub struct OldSale {
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
-#[borsh(crate = "near_sdk::borsh")]
+#[borsh(crate = "near_sdk::borsh", init = touch)]
 pub struct Sale {
     pub owner_id: AccountId,
 

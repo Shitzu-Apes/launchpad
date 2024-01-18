@@ -8,7 +8,6 @@ pub(crate) const EXTRA_NEAR_FOR_STORAGE: u128 = 1000;
 pub(crate) const EXTRA_NEAR: u128 = EXTRA_NEAR_FOR_STORAGE + STORAGE_DEPOSIT;
 
 const BASE_GAS: Gas = Gas::from_tgas(5);
-pub(crate) const FT_TRANSFER_GAS: Gas = BASE_GAS;
 pub(crate) const AFTER_FT_TRANSFER_GAS: Gas = BASE_GAS;
 pub(crate) const AFTER_NEAR_DEPOSIT_GAS: Gas = BASE_GAS;
 

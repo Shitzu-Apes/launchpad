@@ -1,6 +1,6 @@
 use crate::{
     errors,
-    utils::{AFTER_FT_TRANSFER_GAS, FT_TRANSFER_GAS, ONE_YOCTO},
+    utils::{AFTER_FT_TRANSFER_GAS, ONE_YOCTO},
     Contract, ContractExt,
 };
 use near_contract_standards::fungible_token::core::ext_ft_core;
@@ -32,10 +32,11 @@ impl Contract {
     ) -> Promise {
         ext_ft_core::ext(token_account_id.clone())
             .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(FT_TRANSFER_GAS)
+            .with_unused_gas_weight(1)
             .ft_transfer(account_id.clone(), amount.into(), None)
             .then(
                 Self::ext(env::current_account_id())
+                    .with_unused_gas_weight(1)
                     .with_static_gas(AFTER_FT_TRANSFER_GAS)
                     .after_ft_transfer(account_id.clone(), token_account_id.clone(), amount.into()),
             )
