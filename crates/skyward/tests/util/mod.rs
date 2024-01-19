@@ -72,7 +72,6 @@ pub struct Env {
     pub worker: Worker<Sandbox>,
     pub skyward_dao: Account,
     pub skyward: Contract,
-    pub skyward_token: Contract,
     pub permissions_contract: Contract,
     pub w_near: Contract,
 
@@ -147,39 +146,10 @@ impl Env {
                 .transact()
                 .await?,
         )?;
-        let skyward_token = worker
-            .create_tla_and_deploy(
-                SKYWARD_TOKEN_ID.parse()?,
-                SecretKey::from_random(KeyType::ED25519),
-                FUNGIBLE_TOKEN_WASM_BYTES,
-            )
-            .await?
-            .into_result()?;
-        log_tx_result(
-            "Initialize Skyward token contract",
-            skyward_token
-                .call("new")
-                .args_json(json!({
-                    "owner_id": skyward_dao.id(),
-                    "total_supply": U128(SKYWARD_TOTAL_SUPPLY),
-                    "metadata": FungibleTokenMetadata {
-                        spec: FT_METADATA_SPEC.to_string(),
-                        name: "Skyward Finance Token".to_string(),
-                        symbol: "SKYWARD".to_string(),
-                        icon: None,
-                        reference: None,
-                        reference_hash: None,
-                        decimals: SKYWARD_TOKEN_DECIMALS,
-                    }
-                }))
-                .transact()
-                .await?,
-        )?;
         let mut this = Self {
             worker,
             skyward_dao,
             skyward,
-            skyward_token,
             permissions_contract,
             w_near,
             users: vec![],

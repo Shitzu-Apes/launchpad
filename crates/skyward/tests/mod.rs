@@ -1,7 +1,6 @@
 mod util;
 
-use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
-use near_sdk::{env, json_types::U128, serde_json::json, Gas, NearToken};
+use near_sdk::{json_types::U128, serde_json::json, Gas, NearToken};
 use near_workspaces::{
     types::{KeyType, SecretKey},
     AccountId,
@@ -17,7 +16,6 @@ const PERMISSIONS_WASM_BYTES: &[u8] = include_bytes!("../../../res/permissions.w
 const TITLE: &str = "sale title";
 const SKYWARD_ID: &str = "skyward.test.near";
 const WRAP_NEAR_ID: &str = "wrap.test.near";
-const SKYWARD_TOKEN_ID: &str = "token-skyward.test.near";
 const SKYWARD_DAO_ID: &str = "skyward-dao.test.near";
 const PERMISSIONS_CONTRACT_ID: &str = "kyc.test.near";
 
@@ -25,9 +23,6 @@ const TOKEN1_ID: &str = "token1.test.near";
 
 const DAY: u32 = 24 * 60 * 60;
 const WEEK: u32 = 7 * DAY;
-const SKYWARD_TOKEN_DECIMALS: u8 = 18;
-const SKYWARD_TOKEN_BASE: u128 = 10u128.pow(SKYWARD_TOKEN_DECIMALS as u32);
-const SKYWARD_TOTAL_SUPPLY: u128 = 1_000_000 * SKYWARD_TOKEN_BASE;
 const LISTING_FEE_NEAR: NearToken = NearToken::from_near(10);
 const DEFAULT_TOTAL_SUPPLY: u128 = NearToken::from_near(1_000_000_000).as_yoctonear();
 
