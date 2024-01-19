@@ -7,16 +7,17 @@ pub(crate) const STORAGE_DEPOSIT: u128 = 125;
 pub(crate) const EXTRA_NEAR_FOR_STORAGE: u128 = 1000;
 pub(crate) const EXTRA_NEAR: u128 = EXTRA_NEAR_FOR_STORAGE + STORAGE_DEPOSIT;
 
-const BASE_GAS: Gas = Gas::from_tgas(5);
-pub(crate) const AFTER_FT_TRANSFER_GAS: Gas = BASE_GAS;
-pub(crate) const AFTER_NEAR_DEPOSIT_GAS: Gas = BASE_GAS;
+pub(crate) const AFTER_FT_TRANSFER_GAS: Gas = Gas::from_tgas(5);
+pub(crate) const AFTER_NEAR_DEPOSIT_GAS: Gas = Gas::from_tgas(5);
 
-pub(crate) const STORAGE_DEPOSIT_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 2);
-pub(crate) const NEAR_DEPOSIT_GAS: Gas = BASE_GAS;
+pub(crate) const STORAGE_DEPOSIT_GAS: Gas = Gas::from_tgas(10);
+pub(crate) const NEAR_DEPOSIT_GAS: Gas = Gas::from_tgas(5);
 
-pub(crate) const PERMISSION_CONTRACT_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 10);
-pub(crate) const AFTER_IS_APPROVED_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 4);
-pub(crate) const MAYBE_REFUND_DEPOSIT_GAS: Gas = Gas::from_gas(BASE_GAS.as_gas() * 2);
+pub(crate) const PERMISSION_CONTRACT_GAS: Gas = Gas::from_tgas(50);
+pub(crate) const AFTER_IS_APPROVED_GAS: Gas = Gas::from_tgas(20);
+pub(crate) const MAYBE_REFUND_DEPOSIT_GAS: Gas = Gas::from_tgas(10);
+
+pub(crate) const AFTER_CLAIM_TREASURY_GAS: Gas = Gas::from_tgas(15);
 
 pub type BasicPoints = u16;
 

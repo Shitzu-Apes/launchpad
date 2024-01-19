@@ -139,7 +139,11 @@ impl Env {
             "Initialize Skyward contract",
             skyward
                 .call("new")
-                .args_json((U128(LISTING_FEE_NEAR.as_yoctonear()), w_near.id()))
+                .args_json((
+                    SKYWARD_DAO_ID,
+                    U128(LISTING_FEE_NEAR.as_yoctonear()),
+                    w_near.id(),
+                ))
                 .transact()
                 .await?,
         )?;
@@ -438,6 +442,17 @@ impl Env {
             .await?
             .json()?;
         Ok(res.0)
+    }
+
+    pub async fn claim_treasury(&self, user: &Account) -> anyhow::Result<()> {
+        log_tx_result(
+            "claim_treasury",
+            user.call(self.skyward.id(), "claim_treasury")
+                .max_gas()
+                .transact()
+                .await?,
+        )?;
+        Ok(())
     }
 
     pub async fn get_treasury_balances(&self) -> anyhow::Result<Vec<(AccountId, u128)>> {

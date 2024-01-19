@@ -1,7 +1,7 @@
 mod util;
 
 use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
-use near_sdk::{json_types::U128, serde_json::json, Gas, NearToken};
+use near_sdk::{env, json_types::U128, serde_json::json, Gas, NearToken};
 use near_workspaces::{
     types::{KeyType, SecretKey},
     AccountId,
@@ -698,6 +698,21 @@ async fn test_join_sale_with_referral() -> anyhow::Result<()> {
             ),
             (token1.id().clone(), out_amount - ref_amount),
         ]
+    );
+
+    environment.claim_treasury(alice).await?;
+
+    assert_eq!(
+        environment
+            .ft_balance_of(&environment.skyward_dao, environment.w_near.id())
+            .await?,
+        NearToken::from_millinear(40).as_yoctonear()
+    );
+    assert_eq!(
+        environment
+            .ft_balance_of(&environment.skyward_dao, token1.id())
+            .await?,
+        sale_amount / 100
     );
 
     Ok(())

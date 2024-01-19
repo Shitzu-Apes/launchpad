@@ -35,6 +35,8 @@ pub(crate) enum StorageKey {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 #[borsh(crate = "near_sdk::borsh")]
 pub struct Contract {
+    pub dao: AccountId,
+
     pub accounts: LookupMap<AccountId, VAccount>,
 
     pub sales: LookupMap<u64, VSale>,
@@ -47,8 +49,9 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(listing_fee_near: U128, w_near_token_id: AccountId) -> Self {
+    pub fn new(dao: AccountId, listing_fee_near: U128, w_near_token_id: AccountId) -> Self {
         Self {
+            dao,
             accounts: LookupMap::new(StorageKey::Accounts),
             sales: LookupMap::new(StorageKey::Sales),
             num_sales: 0,

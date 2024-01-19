@@ -1,13 +1,14 @@
 use crate::{
-    errors, Contract, ContractExt, StorageKey, AFTER_NEAR_DEPOSIT_GAS, EXTRA_NEAR,
-    NEAR_DEPOSIT_GAS, STORAGE_DEPOSIT, STORAGE_DEPOSIT_GAS,
+    errors, Contract, ContractExt, StorageKey, AFTER_CLAIM_TREASURY_GAS, AFTER_NEAR_DEPOSIT_GAS,
+    EXTRA_NEAR, NEAR_DEPOSIT_GAS, STORAGE_DEPOSIT, STORAGE_DEPOSIT_GAS,
 };
+use near_contract_standards::fungible_token::core::ext_ft_core;
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
     collections::UnorderedMap,
     env,
     json_types::U128,
-    near_bindgen, AccountId, NearToken, Promise,
+    near_bindgen, AccountId, NearToken, Promise, PromiseOrValue, PromiseResult,
 };
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -50,6 +51,56 @@ impl Treasury {
 
 #[near_bindgen]
 impl Contract {
+    pub fn claim_treasury(&mut self) -> PromiseOrValue<()> {
+        let mut promise: Option<Promise> = None;
+        let mut token_ids = Vec::with_capacity(self.treasury.balances.len() as usize);
+        for (token_id, balance) in self.treasury.balances.iter() {
+            if balance == 0 {
+                continue;
+            }
+            token_ids.push(token_id.clone());
+            if let Some(p) = promise {
+                promise = Some(
+                    p.and(
+                        ext_ft_core::ext(token_id.clone())
+                            .with_unused_gas_weight(1)
+                            .with_attached_deposit(NearToken::from_yoctonear(1))
+                            .ft_transfer(self.dao.clone(), balance.into(), None),
+                    ),
+                );
+            } else {
+                promise = Some(
+                    ext_ft_core::ext(token_id.clone())
+                        .with_unused_gas_weight(1)
+                        .with_attached_deposit(NearToken::from_yoctonear(1))
+                        .ft_transfer(self.dao.clone(), balance.into(), None),
+                );
+            }
+        }
+        if let Some(promise) = promise {
+            PromiseOrValue::Promise(
+                promise.then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(AFTER_CLAIM_TREASURY_GAS)
+                        .after_claim_treasury(token_ids),
+                ),
+            )
+        } else {
+            PromiseOrValue::Value(())
+        }
+    }
+
+    #[private]
+    pub fn after_claim_treasury(&mut self, token_ids: Vec<AccountId>) {
+        for i in 0..env::promise_results_count() {
+            if let PromiseResult::Successful(_) = env::promise_result(i) {
+                self.treasury
+                    .balances
+                    .insert(token_ids.get(i as usize).unwrap(), &0);
+            }
+        }
+    }
+
     pub fn get_treasury_balance(&self, token_account_id: AccountId) -> Option<U128> {
         self.treasury
             .balances
