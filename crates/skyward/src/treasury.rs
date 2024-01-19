@@ -14,9 +14,6 @@ use near_sdk::{
 #[borsh(crate = "near_sdk::borsh")]
 pub struct Treasury {
     pub balances: UnorderedMap<AccountId, u128>,
-    pub skyward_token_id: AccountId,
-
-    pub skyward_burned_amount: u128,
 
     pub listing_fee_near: u128,
 
@@ -27,16 +24,9 @@ pub struct Treasury {
 }
 
 impl Treasury {
-    pub fn new(
-        skyward_token_id: AccountId,
-        listing_fee_near: u128,
-        w_near_token_id: AccountId,
-    ) -> Self {
-        assert_ne!(skyward_token_id, w_near_token_id);
+    pub fn new(listing_fee_near: u128, w_near_token_id: AccountId) -> Self {
         Self {
             balances: UnorderedMap::new(StorageKey::TreasuryBalances),
-            skyward_token_id,
-            skyward_burned_amount: 0,
             listing_fee_near,
             w_near_token_id,
             locked_attached_deposits: 0,
@@ -44,9 +34,6 @@ impl Treasury {
     }
 
     pub fn internal_deposit(&mut self, token_account_id: &AccountId, amount: u128) {
-        if token_account_id == &self.skyward_token_id {
-            env::panic_str(errors::TREASURY_CAN_NOT_CONTAIN_SKYWARD);
-        }
         let balance = self.balances.get(token_account_id).unwrap_or(0);
         let new_balance = balance.checked_add(amount).expect(errors::BALANCE_OVERFLOW);
         self.balances.insert(token_account_id, &new_balance);
@@ -58,14 +45,6 @@ impl Treasury {
             .checked_sub(amount)
             .expect(errors::NOT_ENOUGH_BALANCE);
         self.balances.insert(token_account_id, &new_balance);
-    }
-
-    pub fn internal_donate(&mut self, token_account_id: &AccountId, amount: u128) {
-        if token_account_id == &self.skyward_token_id {
-            self.skyward_burned_amount += amount;
-        } else {
-            self.internal_deposit(token_account_id, amount);
-        }
     }
 }
 
@@ -94,10 +73,6 @@ impl Contract {
 
     pub fn get_treasury_num_balances(&self) -> u64 {
         self.treasury.balances.len()
-    }
-
-    pub fn get_skyward_token_id(self) -> AccountId {
-        self.treasury.skyward_token_id
     }
 
     pub fn get_listing_fee(&self) -> U128 {

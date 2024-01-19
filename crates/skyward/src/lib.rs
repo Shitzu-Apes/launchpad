@@ -47,16 +47,12 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(
-        skyward_token_id: AccountId,
-        listing_fee_near: U128,
-        w_near_token_id: AccountId,
-    ) -> Self {
+    pub fn new(listing_fee_near: U128, w_near_token_id: AccountId) -> Self {
         Self {
             accounts: LookupMap::new(StorageKey::Accounts),
             sales: LookupMap::new(StorageKey::Sales),
             num_sales: 0,
-            treasury: Treasury::new(skyward_token_id, listing_fee_near.0, w_near_token_id),
+            treasury: Treasury::new(listing_fee_near.0, w_near_token_id),
         }
     }
 }

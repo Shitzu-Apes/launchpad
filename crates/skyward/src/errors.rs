@@ -19,7 +19,6 @@ pub(crate) const FAILED_TO_PARSE_FT_ON_TRANSFER_MSG: &str =
 pub(crate) const NEED_AT_LEAST_ONE_YOCTO: &str = "ERR_NEED_AT_LEAST_ONE_YOCTO";
 pub(crate) const TOKEN_WITHDRAW_FAILED: &str = "ERR_TOKEN_WITHDRAW_FAILED";
 pub(crate) const SAME_TOKENS: &str = "ERR_SAME_TOKENS";
-pub(crate) const TREASURY_CAN_NOT_CONTAIN_SKYWARD: &str = "ERR_TREASURY_CAN_NOT_CONTAIN_SKYWARD";
 pub(crate) const NON_UNIQUE_OUT_TOKENS: &str = "ERR_NON_UNIQUE_OUT_TOKENS";
 pub(crate) const MAX_NUM_OUT_TOKENS: &str = "ERR_MAX_NUM_OUT_TOKENS";
 pub(crate) const SELF_REFERRAL: &str = "ERR_SELF_REFERRAL";

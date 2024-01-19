@@ -144,9 +144,7 @@ impl Contract {
     ) {
         if account.balances.get(token_account_id).is_none() {
             account.balances.insert(token_account_id, &0);
-            if token_account_id != &self.treasury.skyward_token_id {
-                self.treasury.internal_deposit(token_account_id, 0);
-            }
+            self.treasury.internal_deposit(token_account_id, 0);
         }
     }
 
@@ -194,7 +192,7 @@ impl Contract {
                         }
                         if ref_amount > 0 {
                             self.treasury
-                                .internal_donate(&out_token.token_account_id, ref_amount);
+                                .internal_deposit(&out_token.token_account_id, ref_amount);
                         }
                     }
                 }

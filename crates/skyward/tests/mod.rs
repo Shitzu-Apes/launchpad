@@ -50,7 +50,7 @@ pub struct PartialSale {
 pub struct PartialOutToken {
     pub remaining: U128,
     pub distributed: U128,
-    pub treasury_unclaimed: Option<U128>,
+    pub treasury_unclaimed: U128,
 }
 
 #[tokio::test]
@@ -216,7 +216,7 @@ async fn test_create_sale() -> anyhow::Result<()> {
                 token_account_id: token1.id().parse()?,
                 remaining: NearToken::from_near(4000).as_yoctonear().into(),
                 distributed: 0.into(),
-                treasury_unclaimed: Some(0.into()),
+                treasury_unclaimed: 0.into(),
                 referral_bpt: None
             }],
             in_token_account_id: environment.w_near.id().parse()?,
@@ -337,7 +337,7 @@ async fn test_join_sale() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: NearToken::from_near(3_600).as_yoctonear().into(),
-                treasury_unclaimed: Some(NearToken::from_near(36).as_yoctonear().into()),
+                treasury_unclaimed: NearToken::from_near(36).as_yoctonear().into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: NearToken::from_near(4).as_yoctonear().into(),
@@ -413,7 +413,7 @@ async fn test_join_sale() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: NearToken::from_near(3600).as_yoctonear().into(),
-                treasury_unclaimed: Some(0.into()),
+                treasury_unclaimed: 0.into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: 0.into(),
@@ -446,7 +446,7 @@ async fn test_join_sale() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: NearToken::from_near(3600).as_yoctonear().into(),
-                treasury_unclaimed: Some(0.into()),
+                treasury_unclaimed: 0.into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: 0.into(),
@@ -561,7 +561,7 @@ async fn test_join_sale_with_referral() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: sale_amount.into(),
-                treasury_unclaimed: Some((sale_amount / 100).into()),
+                treasury_unclaimed: (sale_amount / 100).into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: NearToken::from_near(4).as_yoctonear().into(),
@@ -634,7 +634,7 @@ async fn test_join_sale_with_referral() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: sale_amount.into(),
-                treasury_unclaimed: Some(0.into()),
+                treasury_unclaimed: 0.into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: 0.into(),
@@ -667,7 +667,7 @@ async fn test_join_sale_with_referral() -> anyhow::Result<()> {
             out_tokens: vec![PartialOutToken {
                 remaining: 0.into(),
                 distributed: sale_amount.into(),
-                treasury_unclaimed: Some(0.into()),
+                treasury_unclaimed: 0.into(),
             }],
             in_token_remaining: 0.into(),
             in_token_paid_unclaimed: 0.into(),

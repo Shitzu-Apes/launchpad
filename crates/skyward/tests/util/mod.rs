@@ -139,11 +139,7 @@ impl Env {
             "Initialize Skyward contract",
             skyward
                 .call("new")
-                .args_json((
-                    SKYWARD_TOKEN_ID,
-                    U128(LISTING_FEE_NEAR.as_yoctonear()),
-                    w_near.id(),
-                ))
+                .args_json((U128(LISTING_FEE_NEAR.as_yoctonear()), w_near.id()))
                 .transact()
                 .await?,
         )?;
@@ -380,19 +376,14 @@ impl Env {
         let balance_spent = initial_balance
             .checked_sub(user.view_account().await?.balance)
             .unwrap();
-        if deposit.as_yoctonear() > 0 {
-            // Should be listing fee plus some for storage. The rest should be refunded.
-            assert!(
-                LISTING_FEE_NEAR < balance_spent
-                    && balance_spent
-                        < LISTING_FEE_NEAR
-                            .checked_add(NearToken::from_millinear(20))
-                            .unwrap()
-            );
-        } else {
-            // Original Skyward sale doesn't charge listing fee
-            assert!(balance_spent < NearToken::from_millinear(20));
-        }
+        // Should be listing fee plus some for storage. The rest should be refunded.
+        assert!(
+            LISTING_FEE_NEAR < balance_spent
+                && balance_spent
+                    < LISTING_FEE_NEAR
+                        .checked_add(NearToken::from_millinear(20))
+                        .unwrap()
+        );
 
         self.get_sale(sale_id, None).await
     }
